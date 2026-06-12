@@ -1,0 +1,236 @@
+<script>
+    // CRITICAL: Render par deploy hone ke baad jo URL milega, use yahan paste karna!
+    // Jab tak host nahi hota, yeh local computer (localhost) par check karne ke liye set hai.
+    const BACKEND_URL = "http://127.0.0.1:5000"; 
+
+    let applicationState = {
+        name: "", age: "", classUnit: "", points: 0,
+        rank: "5th Rank: Beginner 🛡️ (Belegiam)"
+    };
+
+    window.addEventListener('DOMContentLoaded', () => {
+        generateSystemMissionsGrid();
+        recalculateLeaderboardMatrixDisplay();
+        evaluateCachedStorageMatrix();
+    });
+
+    function dispatchAudioFeedbackWaves(soundProfileType) {
+        try {
+            const targetNode = soundProfileType === 'prestige' ? document.getElementById('audioPrestige') : document.getElementById('audioClick');
+            targetNode.currentTime = 0; targetNode.volume = 0.22; targetNode.play();
+        } catch(e) {}
+    }
+
+    function broadcastSystemToast(messageString, feedbackMode = 'neutral') {
+        const containerNode = document.getElementById('appToastEngine');
+        const creationToastElement = document.createElement('div');
+        creationToastElement.className = `glass-mainframe p-4 rounded-xl flex items-center space-x-3 text-xs font-bold uppercase tracking-wider shadow-2xl border-l-4 pointer-events-auto animate__animated animate__fadeInRight`;
+        
+        if (feedbackMode === 'success') {
+            creationToastElement.classList.add('border-green-500');
+            creationToastElement.innerHTML = `<i class="fa-solid fa-square-check text-green-400 text-base"></i> <span class="text-white">${messageString}</span>`;
+        } else {
+            creationToastElement.classList.add('border-cyan-500');
+            creationToastElement.innerHTML = `<i class="fa-solid fa-wave-square text-cyan-400 text-base"></i> <span class="text-white">${messageString}</span>`;
+        }
+        containerNode.appendChild(creationToastElement);
+        setTimeout(() => {
+            creationToastElement.classList.replace('animate__fadeInRight', 'animate__fadeOutRight');
+            creationToastElement.addEventListener('animationend', () => creationToastElement.remove());
+        }, 3200);
+    }
+
+    // 1. BACKEND LINK: Register Operation
+    async function processRegistrationAction(event) {
+        event.preventDefault();
+        dispatchAudioFeedbackWaves('prestige');
+
+        const name = document.getElementById('regName').value.trim();
+        const age = document.getElementById('regAge').value;
+        const classUnit = document.getElementById('regClass').value.trim();
+
+        try {
+            const response = await fetch(`${BACKEND_URL}/api/register`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, age, classUnit })
+            });
+            const data = await response.json();
+            
+            applicationState = data.agent;
+            localStorage.setItem('assassin_v5_data_cache', JSON.stringify(applicationState));
+            
+            realignDashboardInterfaceFields();
+            recalculateLeaderboardMatrixDisplay();
+            
+            styleAuthCardConnected();
+            broadcastSystemToast(`Profile Connected to Python Backend Server!`, 'success');
+        } catch (error) {
+            broadcastSystemToast("Backend Server Offline! Using Local Emulator Mode.", 'neutral');
+            // Fallback to local mode if server is down
+            applicationState = { name, age, classUnit, points: 0, rank: "5th Rank: Beginner 🛡️" };
+            realignDashboardInterfaceFields();
+        }
+    }
+
+    // 2. BACKEND LINK: Harvest Points Operation
+    async function commitHarvestScorePointOperation(pointWeight, operationalHeadingTitle) {
+        dispatchAudioFeedbackWaves('click');
+        
+        if(!applicationState.name) {
+            broadcastSystemToast("Operation Lock! Create your Agent Identity profile first.", 'neutral');
+            return;
+        }
+
+        try {
+            const response = await fetch(`${BACKEND_URL}/api/update-points`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: applicationState.name, points: pointWeight })
+            });
+            const data = await response.json();
+            
+            let oldRank = applicationState.rank;
+            applicationState = data.agent; // Server tells the new score and rank
+            localStorage.setItem('assassin_v5_data_cache', JSON.stringify(applicationState));
+
+            if (applicationState.rank !== oldRank) {
+                dispatchAudioFeedbackWaves('prestige');
+                document.getElementById('modalMessage').innerHTML = `Phenomenal Grid Scaling! Your total operations yielded <b class="text-yellow-400 font-mono text-base">${applicationState.points} PTS</b>.<br>Clearance upgraded to:<br><span class="text-xl font-black text-pink-500 cyber-font block mt-4 tracking-widest neon-glow-text-pink">${applicationState.rank}</span>`;
+                document.getElementById('levelModal').classList.remove('hidden');
+            } else {
+                broadcastSystemToast(`Harvested +${pointWeight} PTS via Server Node`, 'success');
+            }
+
+            realignDashboardInterfaceFields();
+            recalculateLeaderboardMatrixDisplay();
+        } catch (error) {
+            // Local fallback logic
+            applicationState.points += pointWeight;
+            realignDashboardInterfaceFields();
+            broadcastSystemToast("Points Saved Locally (Server Sync Failed)", 'neutral');
+        }
+    }
+
+    // 3. BACKEND LINK: Live Global Rankings Sync
+    async function recalculateLeaderboardMatrixDisplay() {
+        const DOMHousingContainer = document.getElementById('leaderboardRowsContainer');
+        let players = [];
+
+        try {
+            const response = await fetch(`${BACKEND_URL}/api/leaderboard`);
+            players = await response.json();
+        } catch (error) {
+            // Server offline standard dummy data fallback
+            players = [
+                {name: "Ayush", points: 1580, emoji: "⚡"}, {name: "Shorya", points: 1390, emoji: "🔥"},
+                {name: "Bhanu", points: 1240, emoji: "🔮"}, {name: "Honey Chu", points: 1150, emoji: "👑"},
+                {name: "Pari", points: 1060, emoji: "✨"}
+            ];
+            if(applicationState.name) {
+                players.push({name: `${applicationState.name} (You)`, points: applicationState.points, emoji: "🎯", is_user: true});
+            }
+            players.sort((a,b) => b.points - a.points);
+        }
+
+        DOMHousingContainer.innerHTML = players.map((playerNode, index) => {
+            const isMe = playerNode.name === applicationState.name || playerNode.name.includes('(You)') || playerNode.is_live_agent;
+            const absoluteRowGraphicHighlight = isMe ? 'bg-pink-500/10 font-bold border-y border-pink-500/20 shadow-inner' : '';
+            let badge = `<span class="font-mono text-xs text-gray-400">${index + 1}</span>`;
+            if(isMe) badge = `<span class="bg-pink-600 text-[8px] font-mono font-black px-1.5 py-0.5 rounded text-white animate-pulse">LIVE</span>`;
+
+            return `
+                <div class="grid grid-cols-12 p-3.5 items-center ${absoluteRowGraphicHighlight} hover:bg-white/5">
+                    <div class="col-span-2 text-center font-bold">${badge}</div>
+                    <div class="col-span-7 px-2 flex items-center space-x-3">
+                        <span class="text-lg">${playerNode.emoji || '🎯'}</span>
+                        <span class="${isMe ? 'text-pink-400 font-black' : 'text-gray-200'} text-xs sm:text-sm tech-font truncate">${playerNode.name}</span>
+                    </div>
+                    <div class="col-span-3 text-right pr-2 font-mono font-black text-base ${isMe ? 'text-pink-400' : 'text-yellow-500'}">${playerNode.points}</div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    function realignDashboardInterfaceFields() {
+        const pts = applicationState.points;
+        document.getElementById('headerProfileBadge').innerText = applicationState.name.toUpperCase() || "UNREGISTERED";
+        document.getElementById('headerLivePoints').innerText = `${pts.toString().padStart(3, '0')} PTS`;
+        document.getElementById('dashName').innerText = applicationState.name.toUpperCase() || "OPERATIVE CORE";
+        document.getElementById('dashMeta').innerText = `CLASS // ${applicationState.classUnit || 'N/A'} • AGE // ${applicationState.age || '0'} UNITS`;
+        document.getElementById('dashRankBadge').innerText = applicationState.rank;
+        document.getElementById('dashAvatar').src = `https://api.dicebear.com/7.x/bottts-neutral/svg?seed=${applicationState.name || 'Assassin'}`;
+
+        let limit = pts >= 150 ? 200 : 150;
+        let width = Math.min((pts / limit) * 100, 100);
+        document.getElementById('progressBar').style.width = `${width}%`;
+        document.getElementById('progressText').innerText = `${pts} / ${limit} TOTAL DATA SCORE`;
+    }
+
+    function evaluateCachedStorageMatrix() {
+        const fetchedRecord = localStorage.getItem('assassin_v5_data_cache');
+        if (fetchedRecord) {
+            applicationState = JSON.parse(fetchedRecord);
+            realignDashboardInterfaceFields();
+            styleAuthCardConnected();
+        }
+    }
+
+    function styleAuthCardConnected() {
+        const card = document.getElementById('authPanelCard');
+        if(card) {
+            card.className = "glass-mainframe p-6 rounded-3xl border-t-4 border-green-500 shadow-xl relative overflow-hidden opacity-60 hover:opacity-100 transition-all duration-300";
+            card.querySelector('h3').innerText = "LIVE SERVER CONNECTED";
+            card.querySelector('p').innerText = "Python dynamic streaming sync active";
+        }
+    }
+
+    function generateSystemMissionsGrid() {
+        const mainContainerDOMNode = document.getElementById('taskListContainer');
+        const compiledChoreOperations = [
+            { uid: 101, title: "Clean Battle Station 🧹", reward: 25, coreType: "Routine Chores", note: "Sterilize gaming keyboard setup, scrub desk dust." },
+            { uid: 102, title: "Sanitize Ration Plates 🧼", reward: 30, coreType: "Base Sanitation", note: "Clean and dry used dinner plates inside kitchen hub." },
+            { uid: 103, title: "Sort Wardrobe Armory 👕", reward: 20, coreType: "Grid Logistics", note: "Fold unarranged clothing fibers neatly inside closets." },
+            { uid: 104, title: "Secure Supply Groceries 🛒", reward: 50, coreType: "External Missions", note: "Travel out to local markets to extract raw meal vegetables." },
+            { uid: 105, title: "Hydrate Bio-Green Nodes 🌱", reward: 15, coreType: "Maintenance Ops", note: "Pump vital liquid H2O configurations into balcony plants." },
+            { uid: 106, title: "Purge Safehouse Trash Bins 🗑️", reward: 35, coreType: "Base Sanitation", note: "Gather waste elements and drop them off in external dump metrics." },
+            { uid: 107, title: "Prepare Stamina Catalyst Fluid ☕", reward: 20, coreType: "Energy Infusion", note: "Brew fresh high concentration hot tea or coffee parameters." },
+            { uid: 108, title: "Disinfect Floor Sector Perimeters 🪣", reward: 45, coreType: "Routine Chores", note: "Sweep out micro-dust particles and mop floor surfaces." },
+            { uid: 109, title: "Organize Loose Cable Matrix 🔌", reward: 25, coreType: "Tech Support Node", note: "Untangle and bundle all charging wires behind setup nodes." },
+            { uid: 110, title: "Wipe Command Center Mirrors 🪟", reward: 15, coreType: "Maintenance Ops", note: "Decontaminate smudges from bathroom glass windows." },
+            { uid: 111, title: "Refill Liquid Hydration Bottles 💧", reward: 20, coreType: "Grid Logistics", note: "Fill empty clean water storage containers in cooling grids." },
+            { uid: 112, title: "Execute Heavy Laundry Extraction 🧺", reward: 40, coreType: "Routine Chores", note: "Sort dirty outfits, run automated washing machinery cycles." },
+            { uid: 113, title: "Dust Outpost Weapon Shelves 🪶", reward: 20, coreType: "Maintenance Ops", note: "Brush off fine dust clusters layered across book sets." },
+            { uid: 114, title: "Defrost Ration Cold Storage 🧊", reward: 35, coreType: "Tech Support Node", note: "Wipe down internal ice shelves inside the refrigerator unit." },
+            { uid: 115, title: "Secure Outpost Gates at Dusk 🔑", reward: 10, coreType: "Compound Security", note: "Double check electronic locks and manual bolts on doors." },
+            { uid: 116, title: "Align Entryway Combat Footwear 👟", reward: 15, coreType: "Grid Logistics", note: "Reorganize messy boots and running sneakers neatly on racks." },
+            { uid: 117, title: "Feed Safehouse Animal Companion 🐾", reward: 25, coreType: "Energy Infusion", note: "Serve measured pet nutrients and fresh water bowls." },
+            { uid: 118, title: "Bake Tactical Dinner Rations 🍳", reward: 50, coreType: "External Missions", note: "Provide active cooking assistance in chopping veggies." },
+            { uid: 119, title: "Clean Air Ventilation Fans 💨", reward: 30, coreType: "Maintenance Ops", note: "Wipe thick grease layers accumulating on kitchen exhaust fans." },
+            { uid: 120, title: "Shred Accumulating Junk News Data 📰", reward: 15, coreType: "Base Sanitation", note: "Collect unneeded old paper prints to deliver for recycling paths." },
+            { uid: 121, title: "Wash Base Mobility Vehicle 🚲", reward: 40, coreType: "Grid Logistics", note: "Scrub off dirt, grease, and mud stains from scooters or cars." },
+            { uid: 122, title: "Restock Outpost Soap Dispensers 🧼", reward: 15, coreType: "Base Sanitation", note: "Refill liquid handwash channels near basins." },
+            { uid: 123, title: "Structure First-Aid Recovery Kits 💊", reward: 30, coreType: "Compound Security", note: "Audit emergency medical drawer setups and evaluate safety records." },
+            { uid: 124, title: "Fluff Planning Lounge Cushions 🛋️", reward: 25, coreType: "Routine Chores", note: "Dust off sofa fabrics, realign throw pillows." },
+            { uid: 125, title: "Clear Out Roof Terrace Deck 🧹", reward: 55, coreType: "External Missions", note: "Sweep away accumulated dry leaves from the upper roof deck." }
+        ];
+        mainContainerDOMNode.innerHTML = compiledChoreOperations.map(item => `
+            <div class="glass-card p-4 rounded-2xl flex justify-between items-center gap-4 border-l-2 border-purple-500/20">
+                <div class="space-y-1">
+                    <div class="flex items-center space-x-2">
+                        <span class="text-[8px] font-mono tracking-widest font-bold px-2 py-0.5 rounded bg-purple-950/50 text-cyan-400 border border-cyan-500/10 uppercase">${item.coreType}</span>
+                    </div>
+                    <h4 class="text-base font-bold text-white tech-font tracking-wide">${item.title}</h4>
+                    <p class="text-xs text-gray-400 font-medium max-w-sm leading-snug">${item.note}</p>
+                    </div>
+                <div>
+                    <button onclick="commitHarvestScorePointOperation(${item.reward}, '${item.title}')" class="px-4 py-3 bg-purple-950/40 hover:bg-gradient-to-r hover:from-pink-600 hover:to-purple-600 border border-purple-500/20 hover:border-transparent text-pink-400 hover:text-white font-mono text-xs font-black uppercase rounded-xl transition-all duration-300 shadow-md transform active:scale-95 cursor-pointer">
+                        +${item.reward} PTS
+                    </button>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    function closeGlobalModalWindow() { document.getElementById('levelModal').classList.add('hidden'); }
+</script>
